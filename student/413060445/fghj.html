@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>地鼠大冒險：花園奇幻版</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        :root {
+            --sky: #E0F2FE;
+            --grass: #DCFCE7;
+            --clay-brown: #975A16;
+            --pink-accent: #FCE7F3;
+            --gold: #F6E05E;
+        }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--sky);
+            overflow: hidden;
+            user-select: none;
+        }
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(to bottom, #BAE6FD 0%, #FFF9C4 30%, #DCFCE7 30%, #86EFAC 100%);
+        }
+
+        /* 背景小火車軌道 */
+        .train-track {
+            position: absolute;
+            top: 35%;
+            width: 120%;
+            height: 40px;
+            background: repeating-linear-gradient(90deg, #713F12 0, #713F12 10px, transparent 10px, transparent 40px);
+            border-top: 5px solid #94A3B8;
+            border-bottom: 5px solid #94A3B8;
+            z-index: 1;
+            transform: rotate(-2deg);
+            animation: trackMove 10s linear infinite;
+        }
+        @keyframes trackMove { from { left: -10%; } to { left: 0%; } }
+
+        /* HUD 與 UI */
+        .hud {
+            width: 90%;
+            max-width: 650px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            padding: 15px 30px;
+            border-radius: 40px;
+            margin-top: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.05);
+            z-index: 200;
+            border: 3px solid white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stat-group { text-align: center; }
+        .stat-label { font-size: 12px; color: #64748B; font-weight: 800; }
+        .stat-value { font-size: 32px; font-weight: 900; color: #1E293B; }
+
+        /* 遊戲場地 */
+        .garden-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            padding: 40px;
+            margin-top: auto;
+            margin-bottom: 40px;
+            z-index: 10;
+        }
+
+        /* 地洞設計 */
+        .hole-wrap {
+            position: relative;
+            width: 160px;
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+        .hole-pit {
+            position: absolute;
+            bottom: 20px;
+            width: 140px;
+            height: 50px;
+            background: #1E293B;
+            border-radius: 50%;
+            box-shadow: inset 0 10px 20px rgba(0,0,0,0.6);
+        }
+        .flower-pot {
+            position: absolute;
+            top: -20px;
+            font-size: 40px;
+            animation: bounce 2s infinite;
+            z-index: 30;
+        }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* 躲貓貓蓋子 */
+        .box-lid {
+            position: absolute;
+            bottom: 20px;
+            width: 140px;
+            height: 100px;
+            background: #D97706;
+            border: 4px solid #92400E;
+            border-radius: 10px;
+            z-index: 40;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: 900;
+            transition: all 0.3s;
+        }
+        .box-lid.opened { transform: translateY(-120px) rotate(15deg); opacity: 0; pointer-events: none; }
+
+        /* 地鼠容器 */
+        .mole-clay {
+            position: absolute;
+            width: 120px;
+            height: 150px;
+            bottom: -150px;
+            z-index: 25;
+            transition: bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+        }
+        .mole-clay.up { bottom: 35px; }
+
+        /* 澆水壺 */
+        .watering-can {
+            position: absolute;
+            right: 30px;
+            bottom: 30px;
+            width: 100px;
+            height: 100px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            z-index: 100;
+        }
+        .watering-can:active { transform: rotate(-30deg) scale(1.2); }
+
+        /* 特效 - 星星與閃光 */
+        .combo-text {
+            position: absolute;
+            font-size: 48px;
+            font-weight: 900;
+            color: #F6E05E;
+            text-shadow: 0 0 20px rgba(246, 224, 94, 0.8);
+            pointer-events: none;
+            z-index: 500;
+            animation: floatUp 1s forwards;
+        }
+        @keyframes floatUp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100px); opacity: 0; } }
+
+        /* UI 按鈕與菜單 */
+        .menu-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(20px);
+        }
+        .bait-card {
+            background: white;
+            padding: 20px;
+            border-radius: 30px;
+            margin: 10px;
+            width: 250px;
+            text-align: center;
+            border: 4px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .bait-card.selected { border-color: #F6E05E; transform: scale(1.05); box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .btn-main {
+            padding: 20px 60px;
+            font-size: 32px;
+            font-weight: 900;
+            background: #F6E05E;
+            color: #451a03;
+            border: none;
+            border-radius: 60px;
+            box-shadow: 0 10px 0 #D97706;
+            cursor: pointer;
+            margin-top: 40px;
+        }
+
+        /* 圖冊樣式 */
+        .encyclopedia {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+        .mole-thumb {
+            width: 80px;
+            height: 80px;
+            background: #F1F5F9;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.3;
+        }
+        .mole-thumb.discovered { opacity: 1; background: #FEF3C7; border: 2px solid #F59E0B; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // --- 黏土 3D 地鼠組件 (支援多種職業裝扮) ---
+        const MoleClay = ({ type, color = 'brown' }) => {
+            const outfitColors = {
+                brown: { p: '#A0522D', s: '#652B19' },
+                pink: { p: '#F472B6', s: '#BE185D' },
+                chef: { p: '#F1F5F9', s: '#94A3B8' },
+                scientist: { p: '#BAE6FD', s: '#0369A1' }
+            };
+            const c = outfitColors[color] || outfitColors.brown;
+            
+            return (
+                <svg viewBox="0 0 120 150" style={{width: '100%', height: '100%'}}>
+                    <defs>
+                        <filter id="clay">
+                            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur" />
+                            <feSpecularLighting in="blur" surfaceScale="5" specularConstant="0.8" specularExponent="20" lightingColor="white" result="specOut">
+                                <fePointLight x="-50" y="-50" z="100" />
+                            </feSpecularLighting>
+                            <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut" />
+                            <feComposite in="SourceGraphic" in2="specOut" operator="arithmetic" k2="1" k3="1" />
+                        </filter>
+                    </defs>
+                    <g filter="url(#clay)">
+                        <circle cx="60" cy="80" r="50" fill={c.p} />
+                        {/* 裝扮特效 */}
+                        {type === 'CHEF' && (
+                            <g transform="translate(60, 30)">
+                                <rect x="-25" y="-30" width="50" height="40" rx="10" fill="white" />
+                                <rect x="-30" y="0" width="60" height="10" fill="#CBD5E1" />
+                            </g>
+                        )}
+                        {type === 'MAGICIAN' && (
+                            <g transform="translate(60, 30)">
+                                <rect x="-30" y="-40" width="60" height="45" fill="#1E293B" />
+                                <rect x="-40" y="0" width="80" height="8" fill="#475569" />
+                                <rect x="-30" y="-5" width="60" height="5" fill="#E11D48" />
+                            </g>
+                        )}
+                        {type === 'SCIENTIST' && (
+                            <g>
+                                <rect x="30" y="55" width="60" height="15" rx="5" fill="#E2E8F0" opacity="0.8" />
+                                <circle cx="45" cy="62" r="8" stroke="#1E293B" fill="none" strokeWidth="2" />
+                                <circle cx="75" cy="62" r="8" stroke="#1E293B" fill="none" strokeWidth="2" />
+                            </g>
+                        )}
+                        
+                        {/* 閃亮大眼睛 */}
+                        <circle cx="40" cy="75" r="10" fill="white" />
+                        <circle cx="80" cy="75" r="10" fill="white" />
+                        <circle cx="40" cy="75" r="6" fill="#0F172A" />
+                        <circle cx="80" cy="75" r="6" fill="#0F172A" />
+                        <circle cx="43" cy="72" r="3" fill="white" />
+                        <circle cx="83" cy="72" r="3" fill="white" />
+                        
+                        <ellipse cx="60" cy="95" rx="10" ry="7" fill="#F43F5E" />
+                        <path d="M45 110 Q60 125 75 110" fill="none" stroke="#451a03" strokeWidth="4" strokeLinecap="round" />
+                    </g>
+                </svg>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('MENU'); // MENU, BAIT, GAME, BOOK
+            const [score, setScore] = useState(0);
+            const [lives, setLives] = useState(5);
+            const [level, setLevel] = useState(1);
+            const [discovered, setDiscovered] = useState(new Set(['NORMAL']));
+            const [bait, setBait] = useState(null);
+            
+            const [holes, setHoles] = useState(Array(9).fill({ type: null, isLidded: false, hasFlower: false }));
+            const [combo, setCombo] = useState({ count: 0, lastColor: null });
+            const [showCombo, setShowCombo] = useState(false);
+
+            // 遊戲核心邏輯
+            const spawnMole = useCallback(() => {
+                if (view !== 'GAME') return;
+                const idx = Math.floor(Math.random() * 9);
+                if (holes[idx].type) return;
+
+                const moleTypes = ['NORMAL', 'CHEF', 'MAGICIAN', 'SCIENTIST'];
+                const moleColors = ['brown', 'pink', 'chef', 'scientist'];
+                const rand = Math.random();
+                
+                // 誘餌影響
+                const chefChance = bait === 'CHEESE' ? 0.25 : 0.1;
+                
+                let type = 'NORMAL';
+                let color = 'brown';
+                
+                if (rand < chefChance) { type = 'CHEF'; color = 'chef'; }
+                else if (rand < chefChance + 0.1) { type = 'MAGICIAN'; color = 'pink'; }
+                else if (rand < chefChance + 0.15) { type = 'SCIENTIST'; color = 'scientist'; }
+
+                const isLidded = Math.random() < 0.25;
+                const hasFlower = Math.random() < 0.2;
+
+                const newHoles = [...holes];
+                newHoles[idx] = { type, color, isLidded, hasFlower, up: true };
+                setHoles(newHoles);
+
+                let stay = bait === 'SEEDS' ? 2500 : 1500;
+                setTimeout(() => {
+                    setHoles(prev => {
+                        const next = [...prev];
+                        if (next[idx].up) {
+                            if (!['MAGICIAN','SCIENTIST'].includes(next[idx].type)) setLives(l => Math.max(0, l - 1));
+                            next[idx] = { ...next[idx], up: false, type: null };
+                        }
+                        return next;
+                    });
+                }, stay);
+            }, [holes, view, bait]);
+
+            useEffect(() => {
+                if (view === 'GAME') {
+                    const timer = setInterval(spawnMole, 1200);
+                    return () => clearInterval(timer);
+                }
+            }, [view, spawnMole]);
+
+            const onHit = (idx) => {
+                const hole = holes[idx];
+                if (hole.isLidded) {
+                    const next = [...holes]; next[idx].isLidded = false; setHoles(next);
+                    return;
+                }
+                if (!hole.up) return;
+
+                // 處理連擊
+                if (hole.color === combo.lastColor) {
+                    setCombo(c => ({ count: c.count + 1, lastColor: hole.color }));
+                    if (combo.count >= 2) setShowCombo(true);
+                } else {
+                    setCombo({ count: 1, lastColor: hole.color });
+                    setShowCombo(false);
+                }
+
+                // 分數計算
+                let pts = hole.type === 'CHEF' ? 10 : hole.type === 'MAGICIAN' ? 20 : 5;
+                if (hole.hasFlower) pts *= 2;
+                setScore(s => s + pts);
+                
+                // 圖鑑解鎖
+                if (!discovered.has(hole.type)) {
+                    setDiscovered(prev => new Set([...prev, hole.type]));
+                }
+
+                const next = [...holes];
+                next[idx] = { ...next[idx], up: false, type: null };
+                setHoles(next);
+            };
+
+            return (
+                <div className="app-container">
+                    <div className="train-track" />
+                    
+                    {view === 'MENU' && (
+                        <div className="menu-overlay">
+                            <h1 style={{fontSize: '90px', margin: 0, color: '#451a03'}}>地鼠大冒險</h1>
+                            <p style={{fontSize: '24px', color: '#92400E'}}>高品質花園 3D 體驗</p>
+                            <button className="btn-main" onClick={() => setView('BAIT')}>開始冒險</button>
+                            <button className="btn-main" style={{background:'#FFF', color:'#444', fontSize:'20px', padding:'10px 30px'}} onClick={() => setView('BOOK')}>地鼠圖鑑</button>
+                        </div>
+                    )}
+
+                    {view === 'BAIT' && (
+                        <div className="menu-overlay">
+                            <h1 style={{fontSize: '48px', marginBottom: '30px'}}>選擇你的誘餌</h1>
+                            <div style={{display:'flex'}}>
+                                <div className={`bait-card ${bait === 'CHEESE' ? 'selected' : ''}`} onClick={() => setBait('CHEESE')}>
+                                    <div style={{fontSize: '60px'}}>🧀</div>
+                                    <h3>乳酪</h3>
+                                    <p>稀有職業地鼠出現率增加</p>
+                                </div>
+                                <div className={`bait-card ${bait === 'SEEDS' ? 'selected' : ''}`} onClick={() => setBait('SEEDS')}>
+                                    <div style={{fontSize: '60px'}}>🌻</div>
+                                    <h3>向日葵種子</h3>
+                                    <p>地鼠停留時間變長（降低難度）</p>
+                                </div>
+                            </div>
+                            <button className="btn-main" onClick={() => { setView('GAME'); setScore(0); setLives(5); }}>出發前去花園</button>
+                        </div>
+                    )}
+
+                    {view === 'GAME' && (
+                        <>
+                            <div className="hud">
+                                <div className="stat-group">
+                                    <div className="stat-label">SCORE</div>
+                                    <div className="stat-value">{score}</div>
+                                </div>
+                                <div className="stat-group">
+                                    <div className="stat-label">LIVES</div>
+                                    <div style={{fontSize:'24px'}}>{Array.from({length:5}).map((_,i)=>i<lives?'❤️':'🖤')}</div>
+                                </div>
+                                <div className="stat-group">
+                                    <div className="stat-label">BAIT</div>
+                                    <div style={{fontSize:'24px'}}>{bait === 'CHEESE' ? '🧀' : '🌻'}</div>
+                                </div>
+                            </div>
+
+                            <div className="garden-grid">
+                                {holes.map((h, i) => (
+                                    <div key={i} className="hole-wrap">
+                                        <div className="hole-pit" />
+                                        {h.isLidded && <div className="box-lid">?</div>}
+                                        {h.hasFlower && <div className="flower-pot">🌸</div>}
+                                        <div className={`mole-clay ${h.up ? 'up' : ''}`} onClick={() => onHit(i)}>
+                                            {h.type && <MoleClay type={h.type} color={h.color} />}
+                                        </div>
+                                        <div style={{position:'absolute', bottom:0, width:'100%', height:'40px', background:'#713F12', borderRadius:'50%', zIndex:28}} />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {showCombo && <div className="combo-text" style={{left:'50%', top:'50%'}}>CHAIN! {combo.count}</div>}
+                            
+                            <div className="watering-can" onClick={() => alert('水壺已開啟！下一朵花將雙倍積分！')}>
+                                <svg viewBox="0 0 100 100">
+                                    <path d="M20 60 Q20 40 50 40 L80 40 L80 80 L50 80 Q20 80 20 60" fill="#3B82F6" />
+                                    <path d="M80 50 L95 30" stroke="#3B82F6" strokeWidth="8" />
+                                </svg>
+                            </div>
+                        </>
+                    )}
+
+                    {view === 'BOOK' && (
+                        <div className="menu-overlay">
+                            <h1>地鼠圖鑑</h1>
+                            <div className="encyclopedia">
+                                {['NORMAL', 'CHEF', 'MAGICIAN', 'SCIENTIST'].map(m => (
+                                    <div key={m} className={`mole-thumb ${discovered.has(m) ? 'discovered' : ''}`}>
+                                        {discovered.has(m) ? <div style={{width:'50px'}}><MoleClay type={m} color={m==='CHEF'?'chef':m==='MAGICIAN'?'pink':m==='SCIENTIST'?'scientist':'brown'} /></div> : '?'}
+                                    </div>
+                                ))}
+                            </div>
+                            <button className="btn-main" onClick={() => setView('MENU')}>返回</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
